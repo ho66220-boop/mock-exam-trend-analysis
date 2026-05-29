@@ -1,0 +1,22 @@
+# Local raw and generated data
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Generated analysis tables
+output/tables/*
+!output/tables/.gitkeep
+
+# Internal reports generated from real analysis data
+output/internal/
+
+# Python/cache/local environment
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local editor/system files
+.DS_Store
+Thumbs.db
