@@ -115,8 +115,23 @@ data/sample/
 
 ### 4.3 분석 실행 순서
 
+전체 파이프라인은 한 번에 실행할 수 있습니다. `--source`로 실제 원본과 공개용 더미를 명시적으로 선택하며, 선택한 출처는 `data/processed/dataset_manifest.json`에 기록되어 모든 리포트 상단 배너에 표기됩니다(실데이터/더미 혼입 방지).
+
 ```bash
-python scripts/preprocess_excel.py
+# 공개용 더미(데모)
+python scripts/run_all.py --source sample
+
+# 실제 원본(비공개) — data/raw/ 의 실제 엑셀 사용
+python scripts/run_all.py --source raw
+
+# PowerPoint 산출물 제외
+python scripts/run_all.py --source sample --skip-ppt
+```
+
+개별 단계로 실행하려면 다음 순서를 따릅니다(`preprocess_excel.py`만 `--source`를 받습니다).
+
+```bash
+python scripts/preprocess_excel.py --source sample
 python scripts/analyze_insights.py
 python scripts/analyze_student_groups.py
 python scripts/compare_models.py
@@ -127,6 +142,14 @@ python scripts/create_segment_figures.py
 python scripts/build_final_report.py
 python scripts/build_final_report_ppt.py
 python scripts/build_teacher_ppt.py
+```
+
+### 4.4 회귀 검증
+
+핵심 불변식(더미 표본 수, 9월 시험 분리, 모델 설명력, 소표본/생존편향 라벨 등)을 자동 점검합니다.
+
+```bash
+python scripts/check_pipeline.py
 ```
 
 ---

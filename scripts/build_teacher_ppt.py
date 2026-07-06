@@ -1,6 +1,9 @@
 from pathlib import Path
 
 import pandas as pd
+
+import dataset_meta
+import exam_meta
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData
 from pptx.dml.color import RGBColor
@@ -10,6 +13,7 @@ from pptx.util import Inches, Pt
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PROCESSED_DIR = ROOT / "data" / "processed"
 TABLE_DIR = ROOT / "output" / "tables"
 REPORT_DIR = ROOT / "output" / "reports"
 PPT_PATH = REPORT_DIR / "mock_exam_insight_teacher_briefing.pptx"
@@ -229,7 +233,8 @@ def build_presentation() -> None:
     add_bullets(
         slide,
         [
-            "분석 대상: 수능 이전 모의고사 기록과 수능 결과가 모두 있는 116명",
+            dataset_meta.source_caption(PROCESSED_DIR),
+            f"분석 대상: 수능 이전 모의고사 기록과 수능 결과가 모두 있는 {int(level['n'].sum())}명",
             "핵심 지표: 국어/수학/탐구1/탐구2 백분위 평균",
             "원본 데이터와 중간 CSV는 비공개, 리포트와 시각화만 공유",
         ],
@@ -260,7 +265,7 @@ def build_presentation() -> None:
     slide = add_slide(prs)
     add_title(slide, "월별 상/중/하위권 평균 백분위 흐름", "차트의 축 제목과 계열명은 PowerPoint에서 직접 수정 가능")
     pivot = monthly.pivot(index="month", columns="pre_level", values="avg_core_percentile").reset_index()
-    pivot["month_order"] = pivot["month"].str.replace("월", "", regex=False).astype(int)
+    pivot["month_order"] = pivot["month"].map(exam_meta.label_sort_key)
     pivot = pivot.sort_values("month_order")
     add_line_chart(
         slide,

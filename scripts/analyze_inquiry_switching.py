@@ -5,6 +5,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+import dataset_meta
+import exam_meta
+import stats_utils
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PROCESSED_DIR = ROOT / "data" / "processed"
@@ -21,21 +25,6 @@ def set_korean_font() -> None:
             plt.rcParams["font.family"] = name
             break
     plt.rcParams["axes.unicode_minus"] = False
-
-
-def extract_month(exam_name: str) -> str:
-    if "수능" in str(exam_name):
-        return "수능"
-    return str(exam_name).split("월", 1)[0] + "월"
-
-
-def month_order(month: str) -> int:
-    if month == "수능":
-        return 12
-    try:
-        return int(str(month).replace("월", ""))
-    except ValueError:
-        return 99
 
 
 def inquiry_set(row: pd.Series) -> str | None:
@@ -62,8 +51,8 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
 def prepare_records(pre: pd.DataFrame) -> pd.DataFrame:
     records = pre.copy()
     records = records.sort_values(["student_id", "exam_order", "exam_name"])
-    records["month"] = records["exam_name"].apply(extract_month)
-    records["month_order"] = records["month"].apply(month_order)
+    records["month"] = records["exam_name"].apply(exam_meta.trend_label)
+    records["month_order"] = records["month"].apply(exam_meta.label_sort_key)
     records["inquiry_set"] = records.apply(inquiry_set, axis=1)
     records["inquiry_mean"] = records[["inquiry1_percentile", "inquiry2_percentile"]].mean(
         axis=1, skipna=True
@@ -161,19 +150,25 @@ def summarize_switch_timing(profiles: pd.DataFrame) -> pd.DataFrame:
     changed = profiles[profiles["inquiry_changed"]].dropna(subset=["change_month"]).copy()
     rows = []
     for month, group in changed.groupby("change_month"):
+        # Exclude undefined deltas (no pre or no post record) from both the
+        # numerator and denominator, so a NaN doesn't silently count as "no benefit".
+        post_delta = group["post_minus_pre"].dropna()
+        csat_delta = group["csat_minus_pre_change"].dropna()
         rows.append(
             {
                 "change_month": month,
-                "month_order": month_order(month),
+                "month_order": exam_meta.label_sort_key(month),
                 "n": len(group),
+                "n_post_benefit": int(len(post_delta)),
+                "n_csat_benefit": int(len(csat_delta)),
                 "avg_pre_change_inquiry_mean": group["pre_change_inquiry_mean"].mean(),
                 "avg_post_change_inquiry_mean": group["post_change_inquiry_mean"].mean(),
                 "avg_post_minus_pre": group["post_minus_pre"].mean(),
                 "avg_csat_inquiry_mean": group["csat_inquiry_mean"].mean(),
                 "avg_csat_minus_pre_change": group["csat_minus_pre_change"].mean(),
                 "avg_csat_minus_post_change": group["csat_minus_post_change"].mean(),
-                "benefit_rate_post": (group["post_minus_pre"] > 0).mean(),
-                "benefit_rate_csat": (group["csat_minus_pre_change"] > 0).mean(),
+                "benefit_rate_post": (post_delta > 0).mean() if len(post_delta) else np.nan,
+                "benefit_rate_csat": (csat_delta > 0).mean() if len(csat_delta) else np.nan,
                 "avg_post_records": group["post_change_record_count"].mean(),
             }
         )
@@ -304,13 +299,24 @@ def write_report(profiles: pd.DataFrame, timing: pd.DataFrame, compare: pd.DataF
         lines.append("- 탐구 변경 시기별로 분석할 수 있는 표본이 없습니다.")
     else:
         for _, row in timing.iterrows():
+            post_rate = (
+                f"{row['benefit_rate_post']:.1%}(n={int(row['n_post_benefit'])})"
+                if pd.notna(row["benefit_rate_post"])
+                else "n/a"
+            )
+            csat_rate = (
+                f"{row['benefit_rate_csat']:.1%}(n={int(row['n_csat_benefit'])})"
+                if pd.notna(row["benefit_rate_csat"])
+                else "n/a"
+            )
             lines.append(
                 f"- {row['change_month']}: n={int(row['n'])}, "
                 f"변경 후-전 {row['avg_post_minus_pre']:.1f}, "
                 f"수능-변경 전 {row['avg_csat_minus_pre_change']:.1f}, "
                 f"수능-변경 후 {row['avg_csat_minus_post_change']:.1f}, "
-                f"변경 후 이득률 {row['benefit_rate_post']:.1%}, "
-                f"수능 이득률 {row['benefit_rate_csat']:.1%}"
+                f"변경 후 이득률 {post_rate}, "
+                f"수능 이득률 {csat_rate}"
+                f"{stats_utils.reliability_tag(row['n'])}"
             )
 
     lines.extend(
@@ -325,6 +331,7 @@ def write_report(profiles: pd.DataFrame, timing: pd.DataFrame, compare: pd.DataF
             "- 상담에서는 '언제 바꾸면 오른다'보다 '늦은 변경은 적응 기록 수가 줄어든다'는 리스크까지 함께 전달하는 것이 안전합니다.",
         ]
     )
+    lines = dataset_meta.with_header(lines, PROCESSED_DIR)
     (REPORT_DIR / "inquiry_switching_insights.md").write_text(
         "\n".join(lines), encoding="utf-8"
     )

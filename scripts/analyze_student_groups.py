@@ -3,6 +3,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+import dataset_meta
+import exam_meta
+import stats_utils
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PROCESSED_DIR = ROOT / "data" / "processed"
@@ -53,7 +57,7 @@ def build_student_group_frame(pre: pd.DataFrame, targets: pd.DataFrame) -> pd.Da
     pre = pre.copy()
     targets = targets.copy()
 
-    pre["is_official"] = pre["exam_name"].str.contains("평가원", na=False)
+    pre["is_official"] = pre["exam_name"].apply(exam_meta.is_official)
     pre["pre_core_mean_each_exam"] = core_mean(pre)
     targets["csat_core_mean"] = core_mean(targets)
     targets["csat_inquiry_mean"] = targets[["inquiry1_percentile", "inquiry2_percentile"]].mean(
@@ -122,6 +126,7 @@ def build_student_group_frame(pre: pd.DataFrame, targets: pd.DataFrame) -> pd.Da
 def summarize_group(df: pd.DataFrame, column: str) -> pd.DataFrame:
     rows = []
     for group_name, group in df.groupby(column, dropna=False):
+        ci_low, ci_high = stats_utils.bootstrap_ci(group["csat_core_mean"])
         rows.append(
             {
                 column: group_name,
@@ -129,6 +134,8 @@ def summarize_group(df: pd.DataFrame, column: str) -> pd.DataFrame:
                 "avg_pre_records": group["pre_record_count"].mean(),
                 "avg_pre_core_mean": group["pre_core_mean"].mean(),
                 "avg_csat_core_mean": group["csat_core_mean"].mean(),
+                "csat_core_ci_low": ci_low,
+                "csat_core_ci_high": ci_high,
                 "median_csat_core_mean": group["csat_core_mean"].median(),
                 "avg_csat_minus_pre": group["csat_minus_pre_core_mean"].mean(),
                 "top_25pct_rate": group["top_25pct_csat"].mean(),
@@ -177,6 +184,7 @@ def write_report(
         "- 수능 결과 우수 기준은 국어, 수학, 탐구1, 탐구2 백분위 평균입니다.",
         "- 영어는 등급이라 평균 비교에는 별도 지표로만 포함했습니다.",
         "- 강점 유형은 수능 이전 모의고사 평균에서 국어/수학/탐구 중 5점 이상 앞서는 축으로 분류했습니다.",
+        f"- 수능 핵심 평균 뒤 대괄호는 부트스트랩 95% 신뢰구간이며, n<{stats_utils.MIN_RELIABLE_N} 그룹은 소표본으로 표시합니다.",
         "",
         "## 사설/모의 응시 횟수별 결과",
         "",
@@ -185,19 +193,23 @@ def write_report(
     for _, row in participation.iterrows():
         lines.append(
             f"- {row['participation_group']}: n={int(row['n'])}, "
-            f"수능 핵심 평균 {row['avg_csat_core_mean']:.1f}, "
+            f"수능 핵심 평균 {row['avg_csat_core_mean']:.1f} "
+            f"[{row['csat_core_ci_low']:.1f}–{row['csat_core_ci_high']:.1f}], "
             f"상위 25% 비율 {row['top_25pct_rate']:.1%}, "
             f"수능-수능 이전 평균 차이 {row['avg_csat_minus_pre']:.1f}"
+            f"{stats_utils.reliability_tag(row['n'])}"
         )
 
     lines.extend(["", "## 과목 강점 유형별 결과", ""])
     for _, row in strength.iterrows():
         lines.append(
             f"- {row['strength_label']}: n={int(row['n'])}, "
-            f"수능 핵심 평균 {row['avg_csat_core_mean']:.1f}, "
+            f"수능 핵심 평균 {row['avg_csat_core_mean']:.1f} "
+            f"[{row['csat_core_ci_low']:.1f}–{row['csat_core_ci_high']:.1f}], "
             f"상위 25% 비율 {row['top_25pct_rate']:.1%}, "
             f"국/수/탐 평균 {row['avg_csat_korean']:.1f}/"
             f"{row['avg_csat_math']:.1f}/{row['avg_csat_inquiry']:.1f}"
+            f"{stats_utils.reliability_tag(row['n'])}"
         )
 
     lines.extend(["", "## 응시량 x 강점 유형 상위 조합", ""])
@@ -206,6 +218,7 @@ def write_report(
             f"- {row['participation_group']} + {row['strength_label']}: "
             f"n={int(row['n'])}, 수능 핵심 평균 {row['avg_csat_core_mean']:.1f}, "
             f"상위 25% 비율 {row['top_25pct_rate']:.1%}"
+            f"{stats_utils.reliability_tag(row['n'])}"
         )
 
     lines.extend(
@@ -226,6 +239,7 @@ def write_report(
         ]
     )
 
+    lines = dataset_meta.with_header(lines, PROCESSED_DIR)
     (REPORT_DIR / "student_group_insights.md").write_text(
         "\n".join(lines), encoding="utf-8"
     )

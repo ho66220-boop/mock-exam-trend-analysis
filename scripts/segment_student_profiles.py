@@ -3,8 +3,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+import dataset_meta
+import stats_utils
+
 
 ROOT = Path(__file__).resolve().parents[1]
+PROCESSED_DIR = ROOT / "data" / "processed"
 TABLE_DIR = ROOT / "output" / "tables"
 REPORT_DIR = ROOT / "output" / "reports"
 
@@ -138,6 +142,7 @@ def write_report(
         "- 강점 유형은 국어/수학/탐구/균형형으로 분류했습니다.",
         "- 응시 횟수는 1-3회, 4-6회, 7회 이상으로 나눴습니다.",
         "- 변동성은 학생별 모의고사 핵심 평균 표준편차의 중앙값 기준으로 나눴습니다.",
+        f"- n<{stats_utils.MIN_RELIABLE_N}인 세부 조합은 소표본으로 표시하며, 수치는 참고용입니다.",
         "",
         f"- 분석 대상: {segmented['student_id'].nunique()}명",
         "",
@@ -165,6 +170,7 @@ def write_report(
                 f"- {row['strength_label']}: n={int(row['n'])}, "
                 f"수능 평균 {row['avg_csat_core_mean']:.1f}, "
                 f"상승률 {row['rise_rate']:.1%}, 하락률 {row['drop_rate']:.1%}"
+                f"{stats_utils.reliability_tag(row['n'])}"
             )
         lines.append("")
 
@@ -179,6 +185,7 @@ def write_report(
                 f"- {row['participation_group']}: n={int(row['n'])}, "
                 f"수능 평균 {row['avg_csat_core_mean']:.1f}, "
                 f"상위 25% 비율 {row['top_25pct_rate']:.1%}"
+                f"{stats_utils.reliability_tag(row['n'])}"
             )
         lines.append("")
 
@@ -189,6 +196,7 @@ def write_report(
             f"수능 평균 {row['avg_csat_core_mean']:.1f}, "
             f"수능-수능 이전 평균 {row['avg_csat_minus_pre']:.1f}, "
             f"하락률 {row['drop_rate']:.1%}"
+            f"{stats_utils.reliability_tag(row['n'])}"
         )
 
     lines.extend(["", "## 전달용 핵심 세그먼트", ""])
@@ -198,6 +206,7 @@ def write_report(
             f"{row['participation_group']} / {row['volatility_group']}: "
             f"n={int(row['n'])}, 수능 평균 {row['avg_csat_core_mean']:.1f}, "
             f"{row['insight_message']}"
+            f"{stats_utils.reliability_tag(row['n'])}"
         )
 
     lines.extend(
@@ -220,6 +229,7 @@ def write_report(
         ]
     )
 
+    lines = dataset_meta.with_header(lines, PROCESSED_DIR)
     (REPORT_DIR / "segmented_student_insights.md").write_text(
         "\n".join(lines), encoding="utf-8"
     )
