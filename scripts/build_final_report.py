@@ -3,6 +3,7 @@ from pathlib import Path
 import pandas as pd
 
 import dataset_meta
+import stats_utils
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -130,6 +131,9 @@ def build_report() -> str:
         "- 영어는 등급 자료이므로 핵심 평균에는 포함하지 않고 보조 지표로 활용",
         "- 점수 0은 미응시 또는 미기록 가능성이 높아 결측값으로 처리",
         "- 상위권/중위권/하위권은 수능 이전 모의고사 핵심 평균의 3분위 기준",
+        f"- 아래 표에서 표본 수(n)가 작은 세부 그룹(n<{stats_utils.MIN_RELIABLE_N})은 통계적으로 "
+        "불안정하므로 확정 결론이 아니라 방향성 참고용으로만 해석합니다. 계층 이동 수치는 "
+        "평균회귀 영향을 받으므로 세부 리포트의 경계밴드 설명과 함께 읽어야 합니다.",
         "",
         "## 3. 월별 상/중/하위권 평균 백분위 흐름",
         "",

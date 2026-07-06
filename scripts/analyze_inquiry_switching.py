@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 import dataset_meta
+import stats_utils
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -313,6 +314,7 @@ def write_report(profiles: pd.DataFrame, timing: pd.DataFrame, compare: pd.DataF
                 f"수능-변경 후 {row['avg_csat_minus_post_change']:.1f}, "
                 f"변경 후 이득률 {row['benefit_rate_post']:.1%}, "
                 f"수능 이득률 {row['benefit_rate_csat']:.1%}"
+                f"{stats_utils.reliability_tag(row['n'])}"
             )
 
     lines.extend(

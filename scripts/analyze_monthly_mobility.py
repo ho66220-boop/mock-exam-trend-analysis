@@ -6,6 +6,10 @@ import numpy as np
 import pandas as pd
 
 import dataset_meta
+import stats_utils
+
+# Students within this many points of a tertile cut can flip level on noise alone.
+BOUNDARY_BAND = 2.0
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -68,6 +72,12 @@ def assign_csat_level(segmented: pd.DataFrame) -> pd.DataFrame:
         ["상위권", "하위권"],
         default="중위권",
     )
+    boundary_distance = np.minimum(
+        (segmented["csat_core_mean"] - lower).abs(),
+        (segmented["csat_core_mean"] - upper).abs(),
+    )
+    segmented["csat_boundary_distance"] = boundary_distance
+    segmented["near_csat_boundary"] = boundary_distance <= BOUNDARY_BAND
     segmented["pre_level_score"] = segmented["pre_level"].map(LEVEL_ORDER)
     segmented["csat_level_score"] = segmented["csat_level"].map(LEVEL_ORDER)
     segmented["level_move"] = segmented["csat_level_score"] - segmented["pre_level_score"]
@@ -212,6 +222,12 @@ def write_report(
         "- 상향 이동: 최종 계층이 시작 계층보다 높아진 경우",
         "- 하향 이동: 최종 계층이 시작 계층보다 낮아진 경우",
         "",
+        "> ⚠️ **평균회귀(RTM) 주의:** 시작 계층은 여러 번의 모의고사 *평균*(분산이 작음)이고 "
+        "최종 계층은 *단일 수능*(분산이 큼)의 3분위입니다. 노이즈가 큰 단일 시험을 3등분해 "
+        "평균과 비교하면, 실제 실력 변화가 없어도 상향·하향 이동이 기계적으로 발생합니다. "
+        "또한 3분위 상대이동이라 상향과 하향은 대체로 상쇄되는 제로섬 구조이므로, "
+        "'상향 이동'을 곧 '성적 향상'으로 읽으면 안 됩니다.",
+        "",
         "## 전체 이동 결과",
         "",
     ]
@@ -219,12 +235,23 @@ def write_report(
         count = int(movement_counts.get(label, 0))
         lines.append(f"- {label}: {count}명 ({count / len(segmented):.1%})")
 
+    movers = segmented[segmented["mobility_type"] != "유지"]
+    near_boundary_movers = int(movers["near_csat_boundary"].sum()) if len(movers) else 0
+    total_movers = len(movers)
+    if total_movers:
+        lines.append(
+            f"- 이 중 수능 3분위 경계밴드(±{BOUNDARY_BAND:.0f}점) 안에서 이동한 학생은 "
+            f"{near_boundary_movers}/{total_movers}명입니다. 경계밴드 이동은 작은 점수차로도 "
+            f"뒤바뀌므로 평균회귀 인공물일 가능성이 큽니다."
+        )
+
     lines.extend(["", "## 강점 유형별 상향 이동", ""])
-    for _, row in strength[strength["n"] >= 5].iterrows():
+    for _, row in strength.iterrows():
         lines.append(
             f"- {row['strength_label']}: n={int(row['n'])}, "
             f"상향 {row['up_rate']:.1%}, 하향 {row['down_rate']:.1%}, "
             f"평균 이동 {row['avg_level_move']:.2f}"
+            f"{stats_utils.reliability_tag(row['n'])}"
         )
 
     lines.extend(
@@ -241,6 +268,7 @@ def write_report(
             f"- {row['participation_group']}: n={int(row['n'])}, "
             f"상향 {row['up_rate']:.1%}, 하향 {row['down_rate']:.1%}, "
             f"평균 이동 {row['avg_level_move']:.2f}"
+            f"{stats_utils.reliability_tag(row['n'])}"
         )
 
     lines.extend(["", "## 변동성별 상향 이동", ""])
@@ -249,6 +277,7 @@ def write_report(
             f"- {row['volatility_group']}: n={int(row['n'])}, "
             f"상향 {row['up_rate']:.1%}, 하향 {row['down_rate']:.1%}, "
             f"평균 이동 {row['avg_level_move']:.2f}"
+            f"{stats_utils.reliability_tag(row['n'])}"
         )
 
     lines.extend(["", "## 계층 이동이 활발한 세부 유형", ""])
@@ -258,6 +287,7 @@ def write_report(
             f"{row['volatility_group']}: n={int(row['n'])}, "
             f"상향 {row['up_rate']:.1%}, 하향 {row['down_rate']:.1%}, "
             f"평균 이동 {row['avg_level_move']:.2f}"
+            f"{stats_utils.reliability_tag(row['n'])}"
         )
 
     lines.extend(
@@ -265,9 +295,9 @@ def write_report(
             "",
             "## 해석 주의",
             "",
-            "- 계층 이동은 3분위 기준의 상대적 이동입니다. 절대 점수가 크게 변하지 않아도 경계 부근 학생은 이동할 수 있습니다.",
-            "- 표본 수가 작은 세부 유형은 방향성 참고용으로만 사용해야 합니다.",
-            "- 상향 이동이 많다는 것은 해당 유형의 모든 학생이 오른다는 뜻이 아니라, 작년 데이터에서 그런 사례 비율이 높았다는 의미입니다.",
+            "- 계층 이동은 3분위 기준의 상대적 이동입니다. 절대 점수가 크게 변하지 않아도 경계 부근 학생은 이동할 수 있습니다(위 평균회귀 주의 참고).",
+            f"- n<{stats_utils.MIN_RELIABLE_N}로 표시된 그룹은 소표본이므로 방향성 참고용으로만 사용해야 합니다.",
+            "- 상향 이동이 많다는 것은 해당 유형의 모든 학생이 오른다는 뜻이 아니라, 이 데이터에서 그런 사례 비율이 높았다는 의미입니다.",
         ]
     )
 

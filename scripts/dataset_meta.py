@@ -50,14 +50,26 @@ def header_lines(processed_dir: Path | None = None) -> list[str]:
     source = m.get("source", "unknown")
     is_real = source == "raw"
     banner = "🔴 실제 원본 데이터 (비공개)" if is_real else "🟡 공개용 더미(데모) 데이터"
-    return [
+    lines = [
         f"> **데이터 출처:** {banner} · `source={source}` · 파일 `{m.get('source_file', '?')}`",
         f"> **표본:** 전체 {m.get('clean_students', '?')}명 · "
         f"수능결과 {m.get('csat_students', '?')}명 · 전체기록 {m.get('clean_rows', '?')}건 · "
         f"수능이전기록 {m.get('pre_rows', '?')}건",
         f"> **전처리 생성:** {m.get('generated_at', '?')}",
-        "",
     ]
+
+    total = m.get("clean_students")
+    csat = m.get("csat_students")
+    if isinstance(total, int) and isinstance(csat, int) and total > 0:
+        excluded = total - csat
+        pct = csat / total * 100
+        lines.append(
+            f"> ⚠️ **생존편향 주의:** 전체 {total}명 중 수능 결과가 있는 {csat}명"
+            f"({pct:.1f}%)만 수능 관련 분석에 포함됩니다. 수능 미응시·미기록 {excluded}명은 "
+            f"제외되므로, 아래 수치는 '끝까지 남아 수능을 치른 학생' 기준으로 읽어야 합니다."
+        )
+    lines.append("")
+    return lines
 
 
 def with_header(lines: list[str], processed_dir: Path | None = None) -> list[str]:
