@@ -1,6 +1,10 @@
+import argparse
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+
+import dataset_meta
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,15 +50,36 @@ SUBJECT_COLUMNS = [
 CSAT_KEYWORD = "\uc218\ub2a5"
 
 
-def find_raw_excel() -> Path:
-    search_dir = SAMPLE_RAW_DIR if (SAMPLE_RAW_DIR / "mock_exam_sample.xlsx").exists() else RAW_DIR
-    files = sorted(search_dir.glob("*.xlsx"))
-    if not files:
-        raise FileNotFoundError(f"No .xlsx file found in {search_dir}")
-    if len(files) > 1:
-        names = ", ".join(file.name for file in files)
-        raise RuntimeError(f"Expected one raw Excel file, found {len(files)}: {names}")
-    return files[0]
+def resolve_source(source: str) -> tuple[Path, str]:
+    """Return (excel_path, source_label) for the requested source.
+
+    source:
+      - "sample": public dummy data in data/sample/ (demo, safe to publish).
+      - "raw":    real anonymized data in data/raw/ (private, never published).
+      - "auto":   sample if present, else raw (legacy behavior) — kept for
+                  backward compatibility, but the chosen source is recorded in
+                  the manifest so downstream reports are labeled explicitly.
+    """
+    sample_file = SAMPLE_RAW_DIR / "mock_exam_sample.xlsx"
+
+    if source == "auto":
+        source = "sample" if sample_file.exists() else "raw"
+
+    if source == "sample":
+        if not sample_file.exists():
+            raise FileNotFoundError(f"Sample file not found: {sample_file}")
+        return sample_file, "sample"
+
+    if source == "raw":
+        files = sorted(RAW_DIR.glob("*.xlsx"))
+        if not files:
+            raise FileNotFoundError(f"No .xlsx file found in {RAW_DIR}")
+        if len(files) > 1:
+            names = ", ".join(file.name for file in files)
+            raise RuntimeError(f"Expected one raw Excel file, found {len(files)}: {names}")
+        return files[0], "raw"
+
+    raise ValueError(f"Unknown source: {source!r} (expected raw/sample/auto)")
 
 
 def load_and_clean(path: Path) -> pd.DataFrame:
@@ -88,8 +113,17 @@ def load_and_clean(path: Path) -> pd.DataFrame:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Preprocess mock-exam Excel into analysis CSVs.")
+    parser.add_argument(
+        "--source",
+        choices=["raw", "sample", "auto"],
+        default="auto",
+        help="raw=real private data, sample=public dummy, auto=sample if present else raw (default).",
+    )
+    args = parser.parse_args()
+
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    source = find_raw_excel()
+    source, source_label = resolve_source(args.source)
     clean = load_and_clean(source)
 
     csat_targets = clean[clean["is_csat"]].copy()
@@ -104,7 +138,20 @@ def main() -> None:
         PROCESSED_DIR / "pre_csat_records.csv", index=False, encoding="utf-8-sig"
     )
 
-    print(f"source={source}")
+    dataset_meta.write_manifest(
+        PROCESSED_DIR,
+        {
+            "source": source_label,
+            "source_file": source.name,
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "clean_rows": int(len(clean)),
+            "clean_students": int(clean["student_id"].nunique()),
+            "csat_students": int(csat_targets["student_id"].nunique()),
+            "pre_rows": int(len(pre_csat_records)),
+        },
+    )
+
+    print(f"source={source_label} ({source})")
     print(f"clean_records={len(clean)} rows, {clean['student_id'].nunique()} students")
     print(
         f"csat_targets={len(csat_targets)} rows, "

@@ -12,8 +12,11 @@ from sklearn.model_selection import KFold, cross_validate
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
+import dataset_meta
+
 
 ROOT = Path(__file__).resolve().parents[1]
+PROCESSED_DIR = ROOT / "data" / "processed"
 TABLE_DIR = ROOT / "output" / "tables"
 REPORT_DIR = ROOT / "output" / "reports"
 
@@ -304,6 +307,7 @@ def write_report(results: pd.DataFrame, importance: pd.DataFrame, coefficients: 
         ]
     )
 
+    lines = dataset_meta.with_header(lines, PROCESSED_DIR)
     (REPORT_DIR / "model_comparison.md").write_text("\n".join(lines), encoding="utf-8")
 
 

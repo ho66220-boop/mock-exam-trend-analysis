@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+import dataset_meta
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PROCESSED_DIR = ROOT / "data" / "processed"
@@ -325,6 +327,7 @@ def write_report(profiles: pd.DataFrame, timing: pd.DataFrame, compare: pd.DataF
             "- 상담에서는 '언제 바꾸면 오른다'보다 '늦은 변경은 적응 기록 수가 줄어든다'는 리스크까지 함께 전달하는 것이 안전합니다.",
         ]
     )
+    lines = dataset_meta.with_header(lines, PROCESSED_DIR)
     (REPORT_DIR / "inquiry_switching_insights.md").write_text(
         "\n".join(lines), encoding="utf-8"
     )

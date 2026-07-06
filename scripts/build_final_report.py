@@ -2,8 +2,11 @@ from pathlib import Path
 
 import pandas as pd
 
+import dataset_meta
+
 
 ROOT = Path(__file__).resolve().parents[1]
+PROCESSED_DIR = ROOT / "data" / "processed"
 TABLE_DIR = ROOT / "output" / "tables"
 FIGURE_DIR = ROOT / "output" / "figures"
 REPORT_DIR = ROOT / "output" / "reports"
@@ -101,6 +104,15 @@ def build_report() -> str:
     monthly_pivot = monthly_pivot.sort_values("month_order").drop(columns=["month_order"])
     movement_counts = mobility_profiles["mobility_type"].value_counts()
 
+    # Derive headline counts from the live table so §2/§8/§14 can never disagree.
+    analysis_n = len(mobility_profiles)
+    keep_n = int(movement_counts.get("유지", 0))
+    up_n = int(movement_counts.get("상향 이동", 0))
+    down_n = int(movement_counts.get("하향 이동", 0))
+    keep_pct = keep_n / analysis_n * 100 if analysis_n else 0.0
+    up_pct = up_n / analysis_n * 100 if analysis_n else 0.0
+    down_pct = down_n / analysis_n * 100 if analysis_n else 0.0
+
     lines = [
         "# 샘플 재원생 모의고사-수능 결과 인사이트 종합 리포트",
         "",
@@ -113,7 +125,7 @@ def build_report() -> str:
         "",
         "## 2. 데이터 기준",
         "",
-        "- 분석 대상: 수능 이전 모의고사 기록과 수능 결과가 모두 있는 116명",
+        f"- 분석 대상: 수능 이전 모의고사 기록과 수능 결과가 모두 있는 {analysis_n}명",
         "- 핵심 성과 지표: 국어, 수학, 탐구1, 탐구2 백분위 평균",
         "- 영어는 등급 자료이므로 핵심 평균에는 포함하지 않고 보조 지표로 활용",
         "- 점수 0은 미응시 또는 미기록 가능성이 높아 결측값으로 처리",
@@ -165,7 +177,7 @@ def build_report() -> str:
         "",
         figure("segment_strength_by_level.png", "성취권과 과목 강점 유형별 수능 결과"),
         "",
-        "작년 데이터에서는 상위권에서 균형형 학생의 수능 결과가 가장 안정적으로 높았습니다. "
+        "이 데이터에서는 상위권에서 균형형 학생의 수능 결과가 가장 안정적으로 높았습니다. "
         "중위권은 국어형, 수학형, 균형형의 차이가 크지 않아 약점 보완과 유지 전략을 함께 보는 것이 좋습니다. "
         "하위권에서는 수학형 학생의 상승 가능성이 상대적으로 두드러졌습니다.",
         "",
@@ -187,7 +199,7 @@ def build_report() -> str:
         "",
         "응시 횟수는 인과로 해석하면 안 됩니다. 많이 응시했기 때문에 성적이 오른 것이 아니라, "
         "재원 기간, 성실성, 기존 성취도, 시험 참여 성향이 함께 반영된 지표일 수 있습니다. "
-        "그럼에도 작년 데이터에서는 4-6회 보통 응시 그룹이 전 권역에서 비교적 안정적인 결과를 보였습니다.",
+        "그럼에도 이 데이터에서는 4-6회 보통 응시 그룹이 전 권역에서 비교적 안정적인 결과를 보였습니다.",
         "",
         markdown_table(
             participation.sort_values(["pre_level", "avg_csat_core_mean"], ascending=[True, False]),
@@ -271,7 +283,7 @@ def build_report() -> str:
             ],
         ),
         "",
-        "세부 유형 중 계층 이동이 활발했던 조합은 아래와 같습니다. 표본 수가 작으므로 학생 전달 시에는 '작년 데이터에서 관찰된 사례'로 표현하는 것이 안전합니다.",
+        "세부 유형 중 계층 이동이 활발했던 조합은 아래와 같습니다. 표본 수가 작으므로 학생 전달 시에는 '이 데이터에서 관찰된 사례'로 표현하는 것이 안전합니다.",
         "",
         markdown_table(
             mobility_detailed[mobility_detailed["n"] >= 3].head(8),
@@ -407,7 +419,8 @@ def build_report() -> str:
         "",
         "- 샘플 데이터에서는 상위권 학생 중 국어, 수학, 탐구가 고르게 받쳐주는 균형형 학생의 수능 결과가 가장 안정적으로 높았습니다.",
         "- 월별 평균 백분위 흐름을 보면 권역별 격차와 유지 양상이 드러나므로, 학생에게 현재 위치와 변화 방향을 설명하는 데 활용할 수 있습니다.",
-        "- 작년 데이터에서는 전체의 73.3%가 같은 계층을 유지했고, 상향 이동은 13.8%, 하향 이동은 12.9%였습니다.",
+        f"- 이 데이터에서는 전체의 {keep_pct:.1f}%가 같은 계층을 유지했고, "
+        f"상향 이동은 {up_pct:.1f}%, 하향 이동은 {down_pct:.1f}%였습니다.",
         "- 상위권이라도 월별 성적 변동이 큰 학생은 수능에서 하락한 사례가 더 많이 관찰되어, 흔들림 관리가 중요합니다.",
         "- 중위권은 특정 한 과목 강점보다 약점 축을 줄이고 전체 평균을 끌어올리는 전략이 효과적으로 보입니다.",
         "- 하위권에서는 상승 사례가 존재하지만, 상위권 진입보다는 기본 백분위 평균을 끌어올리는 누적 관리가 우선입니다.",
@@ -431,6 +444,7 @@ def build_report() -> str:
 def main() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     report = build_report()
+    report = "\n".join(dataset_meta.with_header(report.split("\n"), PROCESSED_DIR))
     output = REPORT_DIR / "final_insight_report.md"
     output.write_text(report, encoding="utf-8")
     print(output)

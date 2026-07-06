@@ -3,8 +3,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+import dataset_meta
+
 
 ROOT = Path(__file__).resolve().parents[1]
+PROCESSED_DIR = ROOT / "data" / "processed"
 TABLE_DIR = ROOT / "output" / "tables"
 REPORT_DIR = ROOT / "output" / "reports"
 
@@ -220,6 +223,7 @@ def write_report(
         ]
     )
 
+    lines = dataset_meta.with_header(lines, PROCESSED_DIR)
     (REPORT_DIR / "segmented_student_insights.md").write_text(
         "\n".join(lines), encoding="utf-8"
     )
