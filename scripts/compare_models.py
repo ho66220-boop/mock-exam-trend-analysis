@@ -7,7 +7,7 @@ from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import ElasticNetCV, LinearRegression, RidgeCV
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.inspection import permutation_importance as sk_permutation_importance
 from sklearn.model_selection import KFold, cross_validate
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -48,6 +48,23 @@ CATEGORICAL_FEATURES = [
     "participation_group",
 ]
 
+# For coefficient/importance interpretation only: drop features that are
+# deterministic functions of others (pre_core_mean/pre_inquiry_mean are means of
+# the atomic subject means; private/official counts sum to pre_record_count;
+# strength_label/participation_group are derived from these numerics). Removing
+# them avoids Ridge splitting weight arbitrarily among collinear columns.
+INTERPRETABLE_NUMERIC = [
+    "pre_record_count",
+    "pre_korean_mean",
+    "pre_math_mean",
+    "pre_inquiry1_mean",
+    "pre_inquiry2_mean",
+    "pre_english_mean",
+    "pre_core_latest",
+    "pre_core_std",
+]
+INTERPRETABLE_CATEGORICAL = ["track"]
+
 
 def load_frame() -> pd.DataFrame:
     path = TABLE_DIR / "student_group_profiles.csv"
@@ -56,14 +73,20 @@ def load_frame() -> pd.DataFrame:
     return pd.read_csv(path)
 
 
-def make_preprocessor(scale_numeric: bool = True) -> ColumnTransformer:
+def make_preprocessor(
+    scale_numeric: bool = True,
+    numeric: list[str] | None = None,
+    categorical: list[str] | None = None,
+) -> ColumnTransformer:
+    numeric = NUMERIC_FEATURES if numeric is None else numeric
+    categorical = CATEGORICAL_FEATURES if categorical is None else categorical
     numeric_steps = [("imputer", SimpleImputer(strategy="median"))]
     if scale_numeric:
         numeric_steps.append(("scaler", StandardScaler()))
 
     return ColumnTransformer(
         transformers=[
-            ("num", Pipeline(numeric_steps), NUMERIC_FEATURES),
+            ("num", Pipeline(numeric_steps), numeric),
             (
                 "cat",
                 Pipeline(
@@ -72,8 +95,25 @@ def make_preprocessor(scale_numeric: bool = True) -> ColumnTransformer:
                         ("onehot", OneHotEncoder(handle_unknown="ignore")),
                     ]
                 ),
-                CATEGORICAL_FEATURES,
+                categorical,
             ),
+        ]
+    )
+
+
+def interpretation_model() -> Pipeline:
+    """Ridge over the decorrelated feature set, used for both permutation
+    importance and coefficient reporting so the two agree."""
+    return Pipeline(
+        [
+            (
+                "preprocess",
+                make_preprocessor(
+                    numeric=INTERPRETABLE_NUMERIC,
+                    categorical=INTERPRETABLE_CATEGORICAL,
+                ),
+            ),
+            ("model", RidgeCV(alphas=[0.1, 1.0, 3.0, 10.0, 30.0, 100.0])),
         ]
     )
 
@@ -189,46 +229,54 @@ def evaluate_models(df: pd.DataFrame) -> pd.DataFrame:
     return result.sort_values(["target", "cv_r2_mean"], ascending=[True, False])
 
 
-def permutation_importance_holdout(
-    model: Pipeline,
+def permutation_importance_cv(
     x: pd.DataFrame,
     y: pd.Series,
     repeats: int = 30,
+    seed: int = 42,
 ) -> pd.DataFrame:
-    rng = np.random.default_rng(42)
-    model.fit(x, y)
-    pred = model.predict(x)
-    baseline = r2_score(y, pred)
+    """Out-of-sample permutation importance.
 
-    rows = []
-    for feature in x.columns:
-        drops = []
-        for _ in range(repeats):
-            shuffled = x.copy()
-            shuffled[feature] = rng.permutation(shuffled[feature].to_numpy())
-            shuffled_pred = model.predict(shuffled)
-            drops.append(baseline - r2_score(y, shuffled_pred))
-        rows.append(
-            {
-                "feature": feature,
-                "r2_drop_mean": float(np.mean(drops)),
-                "r2_drop_std": float(np.std(drops)),
-            }
+    For each CV fold the model is fit on the training part and importances are
+    measured on the *held-out* test part, then averaged. This avoids the earlier
+    in-sample version (fit and score on the same rows), which inflated
+    importances and rewarded overfitting.
+    """
+    kf = KFold(n_splits=5, shuffle=True, random_state=seed)
+    per_feature: dict[str, list[float]] = {feature: [] for feature in x.columns}
+
+    for train_idx, test_idx in kf.split(x):
+        model = interpretation_model()
+        model.fit(x.iloc[train_idx], y.iloc[train_idx])
+        result = sk_permutation_importance(
+            model,
+            x.iloc[test_idx],
+            y.iloc[test_idx],
+            n_repeats=repeats,
+            random_state=seed,
+            scoring="r2",
         )
+        for i, feature in enumerate(x.columns):
+            per_feature[feature].append(float(result.importances_mean[i]))
+
+    rows = [
+        {
+            "feature": feature,
+            "r2_drop_mean": float(np.mean(values)),
+            "r2_drop_std": float(np.std(values)),
+        }
+        for feature, values in per_feature.items()
+    ]
     return pd.DataFrame(rows).sort_values("r2_drop_mean", ascending=False)
 
 
 def fitted_linear_coefficients(df: pd.DataFrame, target: str) -> pd.DataFrame:
-    data = df[NUMERIC_FEATURES + CATEGORICAL_FEATURES + [target]].dropna(subset=[target])
-    x = data[NUMERIC_FEATURES + CATEGORICAL_FEATURES]
+    features = INTERPRETABLE_NUMERIC + INTERPRETABLE_CATEGORICAL
+    data = df[features + [target]].dropna(subset=[target])
+    x = data[features]
     y = data[target]
 
-    model = Pipeline(
-        [
-            ("preprocess", make_preprocessor()),
-            ("model", RidgeCV(alphas=[0.1, 1.0, 3.0, 10.0, 30.0, 100.0])),
-        ]
-    )
+    model = interpretation_model()
     model.fit(x, y)
     preprocessor = model.named_steps["preprocess"]
     feature_names = preprocessor.get_feature_names_out()
@@ -279,11 +327,21 @@ def write_report(results: pd.DataFrame, importance: pd.DataFrame, coefficients: 
             f"MAE {row['cv_mae_mean']:.2f}, RMSE {row['cv_rmse_mean']:.2f}"
         )
 
-    lines.extend(["", "## 수능 핵심 평균에서 중요한 변수", ""])
+    lines.extend(
+        [
+            "",
+            "## 수능 핵심 평균에서 중요한 변수",
+            "",
+            "> 중요도는 교차검증 홀드아웃 기준(각 폴드의 테스트셋에서 측정)이며, "
+            "파생 중복 변수(pre_core_mean, pre_inquiry_mean, 응시량 파생 라벨 등)를 제외한 "
+            "비공선 피처 집합에 대해 계산했습니다.",
+            "",
+        ]
+    )
     for _, row in importance.head(8).iterrows():
         lines.append(f"- {row['feature']}: R2 감소 {row['r2_drop_mean']:.3f}")
 
-    lines.extend(["", "## Ridge 계수 상위 변수", ""])
+    lines.extend(["", "## Ridge 계수 상위 변수 (비공선 피처)", ""])
     for _, row in coefficients.head(10).iterrows():
         sign = "+" if row["coefficient"] >= 0 else "-"
         lines.append(
@@ -318,16 +376,9 @@ def main() -> None:
     results.to_csv(TABLE_DIR / "model_comparison.csv", index=False, encoding="utf-8-sig")
 
     target = "csat_core_mean"
-    data = df[NUMERIC_FEATURES + CATEGORICAL_FEATURES + [target]].dropna(subset=[target])
-    x = data[NUMERIC_FEATURES + CATEGORICAL_FEATURES]
-    y = data[target]
-    best_core_name = (
-        results[results["target"] == target]
-        .sort_values("cv_r2_mean", ascending=False)
-        .iloc[0]["model"]
-    )
-    best_model = model_specs()[best_core_name]
-    importance = permutation_importance_holdout(best_model, x, y)
+    interp_features = INTERPRETABLE_NUMERIC + INTERPRETABLE_CATEGORICAL
+    idata = df[interp_features + [target]].dropna(subset=[target])
+    importance = permutation_importance_cv(idata[interp_features], idata[target])
     coefficients = fitted_linear_coefficients(df, target)
 
     importance.to_csv(

@@ -3,6 +3,7 @@ from pathlib import Path
 import pandas as pd
 
 import dataset_meta
+import exam_meta
 import stats_utils
 
 
@@ -99,9 +100,7 @@ def build_report() -> str:
         monthly.pivot(index="month", columns="pre_level", values="avg_core_percentile")
         .reset_index()
     )
-    monthly_pivot["month_order"] = monthly_pivot["month"].apply(
-        lambda value: int(str(value).replace("월", "")) if "월" in str(value) else 99
-    )
+    monthly_pivot["month_order"] = monthly_pivot["month"].apply(exam_meta.label_sort_key)
     monthly_pivot = monthly_pivot.sort_values("month_order").drop(columns=["month_order"])
     movement_counts = mobility_profiles["mobility_type"].value_counts()
 

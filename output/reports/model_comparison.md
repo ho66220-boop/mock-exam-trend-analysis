@@ -2,7 +2,7 @@
 
 > **데이터 출처:** 🟡 공개용 더미(데모) 데이터 · `source=sample` · 파일 `mock_exam_sample.xlsx`
 > **표본:** 전체 180명 · 수능결과 137명 · 전체기록 1496건 · 수능이전기록 1031건
-> **전처리 생성:** 2026-07-06T23:48:35
+> **전처리 생성:** 2026-07-07T00:00:53
 > ⚠️ **생존편향 주의:** 전체 180명 중 수능 결과가 있는 137명(76.1%)만 수능 관련 분석에 포함됩니다. 수능 미응시·미기록 43명은 제외되므로, 아래 수치는 '끝까지 남아 수능을 치른 학생' 기준으로 읽어야 합니다.
 
 
@@ -31,27 +31,29 @@
 
 ## 수능 핵심 평균에서 중요한 변수
 
-- pre_core_latest: R2 감소 0.128
-- pre_math_mean: R2 감소 0.072
-- pre_core_mean: R2 감소 0.034
-- pre_inquiry_mean: R2 감소 0.026
-- pre_inquiry1_mean: R2 감소 0.024
-- pre_korean_mean: R2 감소 0.023
-- pre_inquiry2_mean: R2 감소 0.022
-- pre_core_std: R2 감소 0.017
+> 중요도는 교차검증 홀드아웃 기준(각 폴드의 테스트셋에서 측정)이며, 파생 중복 변수(pre_core_mean, pre_inquiry_mean, 응시량 파생 라벨 등)를 제외한 비공선 피처 집합에 대해 계산했습니다.
 
-## Ridge 계수 상위 변수
+- pre_core_latest: R2 감소 0.142
+- pre_math_mean: R2 감소 0.089
+- pre_inquiry1_mean: R2 감소 0.084
+- pre_inquiry2_mean: R2 감소 0.077
+- pre_korean_mean: R2 감소 0.051
+- pre_core_std: R2 감소 0.018
+- track: R2 감소 0.006
+- pre_record_count: R2 감소 0.000
 
-- num__pre_core_latest: +2.418
-- num__pre_math_mean: +2.094
-- num__pre_core_mean: +1.761
-- num__pre_inquiry_mean: +1.538
-- num__pre_inquiry2_mean: +1.530
-- num__pre_inquiry1_mean: +1.528
-- num__pre_korean_mean: +1.515
-- num__pre_core_std: +1.060
-- cat__strength_label_수학형: -0.672
-- cat__strength_label_균형형: +0.611
+## Ridge 계수 상위 변수 (비공선 피처)
+
+- num__pre_core_latest: +3.451
+- num__pre_inquiry1_mean: +2.649
+- num__pre_math_mean: +2.642
+- num__pre_inquiry2_mean: +2.478
+- num__pre_korean_mean: +1.986
+- num__pre_core_std: +1.213
+- cat__track_인문계열: +0.739
+- cat__track_자연계열: -0.739
+- num__pre_record_count: -0.281
+- num__pre_english_mean: +0.020
 
 ## 해석
 

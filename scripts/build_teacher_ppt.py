@@ -1,6 +1,8 @@
 from pathlib import Path
 
 import pandas as pd
+
+import exam_meta
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData
 from pptx.dml.color import RGBColor
@@ -260,7 +262,7 @@ def build_presentation() -> None:
     slide = add_slide(prs)
     add_title(slide, "월별 상/중/하위권 평균 백분위 흐름", "차트의 축 제목과 계열명은 PowerPoint에서 직접 수정 가능")
     pivot = monthly.pivot(index="month", columns="pre_level", values="avg_core_percentile").reset_index()
-    pivot["month_order"] = pivot["month"].str.replace("월", "", regex=False).astype(int)
+    pivot["month_order"] = pivot["month"].map(exam_meta.label_sort_key)
     pivot = pivot.sort_values("month_order")
     add_line_chart(
         slide,

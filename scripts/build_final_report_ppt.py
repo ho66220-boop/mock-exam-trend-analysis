@@ -1,6 +1,8 @@
 from pathlib import Path
 
 import pandas as pd
+
+import exam_meta
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData
 from pptx.dml.color import RGBColor
@@ -210,7 +212,7 @@ def build():
     s = add_slide(prs)
     title(s, "월별 상/중/하위권 평균 백분위 흐름")
     pivot = monthly.pivot(index="month", columns="pre_level", values="avg_core_percentile").reset_index()
-    pivot["order"] = pivot["month"].str.replace("월", "", regex=False).astype(int)
+    pivot["order"] = pivot["month"].map(exam_meta.label_sort_key)
     pivot = pivot.sort_values("order")
     line_chart(s, pivot["month"].tolist(), {"상위권": pivot["상위권"].round(1).tolist(), "중위권": pivot["중위권"].round(1).tolist(), "하위권": pivot["하위권"].round(1).tolist()}, 0.65, 1.15, 8.0, 4.8, "월별 평균 백분위", "시험 월", "국어/수학/탐구 평균 백분위")
     table(s, pivot[["month", "상위권", "중위권", "하위권"]], ["month", "상위권", "중위권", "하위권"], ["월", "상위권", "중위권", "하위권"], 8.9, 1.35, 3.7, 4.1, 8)

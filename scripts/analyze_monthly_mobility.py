@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 import dataset_meta
+import exam_meta
 import stats_utils
 
 # Students within this many points of a tertile cut can flip level on noise alone.
@@ -39,19 +40,6 @@ def set_korean_font() -> None:
     plt.rcParams["axes.unicode_minus"] = False
 
 
-def extract_month(exam_name: str) -> str:
-    if "수능" in str(exam_name):
-        return "수능"
-    return str(exam_name).split("월", 1)[0] + "월"
-
-
-def month_sort_key(month: str) -> int:
-    if month == "수능":
-        return 12
-    try:
-        return int(month.replace("월", ""))
-    except ValueError:
-        return 99
 
 
 def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -96,8 +84,8 @@ def build_monthly_trend(clean: pd.DataFrame, segmented: pd.DataFrame) -> pd.Data
     levels = segmented[["student_id", "pre_level"]]
     records = clean.merge(levels, on="student_id", how="inner")
     records = records[~records["is_csat"]].copy()
-    records["month"] = records["exam_name"].apply(extract_month)
-    records["month_order"] = records["month"].apply(month_sort_key)
+    records["month"] = records["exam_name"].apply(exam_meta.trend_label)
+    records["month_order"] = records["month"].apply(exam_meta.label_sort_key)
     records["core_mean"] = records[CORE_SUBJECTS].mean(axis=1, skipna=True)
 
     trend = (

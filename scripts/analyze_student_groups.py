@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 import dataset_meta
+import exam_meta
 import stats_utils
 
 
@@ -56,7 +57,7 @@ def build_student_group_frame(pre: pd.DataFrame, targets: pd.DataFrame) -> pd.Da
     pre = pre.copy()
     targets = targets.copy()
 
-    pre["is_official"] = pre["exam_name"].str.contains("평가원", na=False)
+    pre["is_official"] = pre["exam_name"].apply(exam_meta.is_official)
     pre["pre_core_mean_each_exam"] = core_mean(pre)
     targets["csat_core_mean"] = core_mean(targets)
     targets["csat_inquiry_mean"] = targets[["inquiry1_percentile", "inquiry2_percentile"]].mean(

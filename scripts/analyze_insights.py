@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 import dataset_meta
+import exam_meta
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -94,8 +95,8 @@ def build_student_features(pre: pd.DataFrame, targets: pd.DataFrame) -> pd.DataF
             "student_id": student_id,
             "track": target_lookup.loc[student_id, "track"],
             "pre_record_count": len(group),
-            "private_record_count": int((~group["exam_name"].str.contains("평가원", na=False)).sum()),
-            "official_record_count": int(group["exam_name"].str.contains("평가원", na=False).sum()),
+            "private_record_count": int((~group["exam_name"].apply(exam_meta.is_official)).sum()),
+            "official_record_count": int(group["exam_name"].apply(exam_meta.is_official).sum()),
         }
 
         for subject, meta in SUBJECTS.items():
