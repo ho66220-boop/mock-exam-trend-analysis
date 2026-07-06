@@ -72,6 +72,22 @@ def header_lines(processed_dir: Path | None = None) -> list[str]:
     return lines
 
 
+def source_caption(processed_dir: Path | None = None) -> str:
+    """One-line plain-text (no markdown) source caption for slides/PPT."""
+    m = load_manifest(processed_dir)
+    if not m:
+        return "데이터 출처 미상 (preprocess_excel.py를 먼저 실행)"
+    source = m.get("source", "unknown")
+    banner = "실제 원본(비공개)" if source == "raw" else "공개용 더미(데모)"
+    total = m.get("clean_students")
+    csat = m.get("csat_students")
+    coverage = f" · 분석 커버리지 {csat}/{total}명" if isinstance(total, int) and isinstance(csat, int) else ""
+    return (
+        f"데이터 출처: {banner} · 전체 {total}명 · 수능결과 {csat}명{coverage} · "
+        f"생성 {m.get('generated_at', '?')}"
+    )
+
+
 def with_header(lines: list[str], processed_dir: Path | None = None) -> list[str]:
     """Insert the source header block right after a report's `# title` line."""
     header = header_lines(processed_dir)

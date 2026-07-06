@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
+import dataset_meta
 import exam_meta
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData
@@ -12,6 +13,7 @@ from pptx.util import Inches, Pt
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PROCESSED_DIR = ROOT / "data" / "processed"
 TABLE_DIR = ROOT / "output" / "tables"
 REPORT_DIR = ROOT / "output" / "reports"
 PPT_PATH = REPORT_DIR / "final_insight_report_internal_share.pptx"
@@ -207,7 +209,8 @@ def build():
 
     s = add_slide(prs)
     title(s, "데이터 기준")
-    bullets(s, ["분석 대상: 수능 이전 모의고사 기록과 수능 결과가 모두 있는 116명", "핵심 성과 지표: 국어, 수학, 탐구1, 탐구2 백분위 평균", "영어는 등급 자료이므로 핵심 평균에는 포함하지 않고 보조 지표로 활용", "점수 0은 미응시 또는 미기록 가능성이 높아 결측값 처리", "상위권/중위권/하위권은 수능 이전 모의고사 핵심 평균의 3분위 기준"], size=17)
+    analysis_n = int(level["n"].sum())
+    bullets(s, [dataset_meta.source_caption(PROCESSED_DIR), f"분석 대상: 수능 이전 모의고사 기록과 수능 결과가 모두 있는 {analysis_n}명", "핵심 성과 지표: 국어, 수학, 탐구1, 탐구2 백분위 평균", "영어는 등급 자료이므로 핵심 평균에는 포함하지 않고 보조 지표로 활용", "점수 0은 미응시 또는 미기록 가능성이 높아 결측값 처리", "상위권/중위권/하위권은 수능 이전 모의고사 핵심 평균의 3분위 기준"], size=16)
 
     s = add_slide(prs)
     title(s, "월별 상/중/하위권 평균 백분위 흐름")

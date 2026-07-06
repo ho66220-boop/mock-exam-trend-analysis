@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
+import dataset_meta
 import exam_meta
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData
@@ -12,6 +13,7 @@ from pptx.util import Inches, Pt
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PROCESSED_DIR = ROOT / "data" / "processed"
 TABLE_DIR = ROOT / "output" / "tables"
 REPORT_DIR = ROOT / "output" / "reports"
 PPT_PATH = REPORT_DIR / "mock_exam_insight_teacher_briefing.pptx"
@@ -231,7 +233,8 @@ def build_presentation() -> None:
     add_bullets(
         slide,
         [
-            "분석 대상: 수능 이전 모의고사 기록과 수능 결과가 모두 있는 116명",
+            dataset_meta.source_caption(PROCESSED_DIR),
+            f"분석 대상: 수능 이전 모의고사 기록과 수능 결과가 모두 있는 {int(level['n'].sum())}명",
             "핵심 지표: 국어/수학/탐구1/탐구2 백분위 평균",
             "원본 데이터와 중간 CSV는 비공개, 리포트와 시각화만 공유",
         ],
